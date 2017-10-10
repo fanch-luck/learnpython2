@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #coding:utf-8
-import os, sys, socket, struct, select, time
+import os, sys, socket, struct, select, time, threading
 
 # From /usr/include/linux/icmp.h; your milage may vary.
 ICMP_ECHO_REQUEST = 8 # Seems to be the same on Solaris.
@@ -116,6 +116,7 @@ def verbose_ping(dest_addr, timeout = 2, count = 100):
     the result.
     """
     for i in xrange(count):
+        time.sleep(.01)
         print "ping %s..." % dest_addr,
         try:
             delay  =  do_one(dest_addr, timeout)
@@ -130,5 +131,10 @@ def verbose_ping(dest_addr, timeout = 2, count = 100):
             print "get ping in %0.4fms" % delay
 
 if __name__ == '__main__':
-    # verbose_ping("www.163.com",2,1)
-    verbose_ping("192.168.22.1", 2, 10)
+    # t1 = time.clock()
+    # verbose_ping("www.163.com",2,1000)
+    # # verbose_ping("192.168.22.1", 2, 10)
+    # t2 = time.clock()
+    # print 'used time: ', t2-t1, 'sec'
+    for addrs in ('www.baidu.com', 'www.163.com'):
+        thread.start_new_thread(verbose_ping, (addrs, 2, 10))
