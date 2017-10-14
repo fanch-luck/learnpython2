@@ -5,7 +5,7 @@ import sys
 import os
 import time
 import thread
-ip_addresses = []
+IP_ADDRESSES = []
 
 
 def get_os():
@@ -21,7 +21,7 @@ def ping_ip(ip_str):
            "1", ip_str]
 
     output = os.popen(" ".join(cmd)).readlines()
-    global ip_addresses
+    global IP_ADDRESSES
     for line in list(output):
         if not line:
             continue
@@ -49,7 +49,7 @@ if __name__ == "__main__":
     ip_pre = '192.168.22'
     find_ips(ip_pre)
     time.sleep(20)
-    print('find ip addresses:\n', ip_addresses)
+    print('find ip addresses:\n', IP_ADDRESSES)
 
 
 

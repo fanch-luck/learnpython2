@@ -5,7 +5,7 @@ import sys
 import os
 import time
 import _thread as thread
-ip_addresses = []
+IP_ADDRESSES = []
 ping_result_data = []
 ping_result_time = []
 
@@ -26,7 +26,7 @@ def ping_ip(ip_str):
            "1", ip_str]
 
     output = os.popen(" ".join(cmd)).readlines()
-    global ip_addresses
+    global IP_ADDRESSES
     for line in list(output):
         if not line:
             continue
