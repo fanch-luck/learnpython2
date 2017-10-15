@@ -5,3 +5,4 @@ api
 source/inspector.html
 /.idea
 /pingip/rewrite/ethbdping/*.txt
+/.editorconfig
