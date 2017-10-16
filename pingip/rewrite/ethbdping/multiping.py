@@ -27,9 +27,9 @@ def get_os():
     """
     currentos = platform.system()
     if currentos == 'Windows':
-        return 'l', 'n', 't', 'gbk', 2
+        return 'l', 'n', 't', 'gbk', 3, -2
     else:
-        return 's', 'c', ' ', 'utf-8', 5
+        return 's', 'c', ' ', 'utf-8', 5, None
 
 
 def find_ips(ip_prefix, ip_strt, ip_end):
@@ -61,7 +61,7 @@ def find_ips(ip_prefix, ip_strt, ip_end):
         time.sleep(0.1)
 
 
-def monitor(ipstr, save_intervall, thread_during):
+def monitor(ipstr, record_oncee, save_intervall, thread_during):
     """
     在线程中向每个地址发送ping命令，根据回显信息监控其状态，保存信息到指定文件中
     :param ipstr: 单个ip地址
@@ -71,25 +71,35 @@ def monitor(ipstr, save_intervall, thread_during):
     """
     global QUIT_FLAG
 
-    used_piece = get_os()[4]
+    used_strt, used_end = get_os()[4:6]
     # 回显信息中响应时间参数的位置单位秒（字符串split方法生成列表）
 
     filename = ipstr+'.txt'
     logfile = codecs.open(filename, 'a+', 'utf-8')
     time.sleep(0.1)
-    logfile.write("""\
+    logfile.write('\n'+"""\
 ------------------------------------------------
 start ping {0} at {1}
-if one address were reachable, the response
-time(ms) would be record only
+if one address were reachable, the times of
+right response with be record with time couple:
+[t<=1, 1<t<=5, 5<t<=10, 10<t<=50, 50<t ]
 ------------------------------------------------\n""".format(
         ipstr, nowtime().strftime('%Y-%m-%d %H:%M:%S')))
     time.sleep(0.1)
-    cmd = ['ping', '-{}'.format(get_os()[0]), '1400', '-{}'.format(get_os()[2]), ipstr]
+    if platform.system() == 'Windows':
+        cmd = ['ping', '-l', '1400', '-t', ipstr]
+    else:
+        cmd = ['ping', '-s', '1400', ipstr]
+
     popen = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-    i = 0
     currentimestr = ''
     thread_start_time = nowtime()
+    counter_0_1 = 0
+    counter_1_5 = 0
+    counter_5_10 = 0
+    counter_10_50 = 0
+    counter_50_huge = 0
+
     while not QUIT_FLAG:
         currentime = nowtime()
         currentimestr = currentime.strftime('%Y-%m-%d %H:%M:%S')
@@ -101,17 +111,33 @@ time(ms) would be record only
                 towrite = currentimestr + ' ' + reline[:-1]
             elif reline.upper().find('TTL') >= 0:
                 # 获取回显信息，只取响应时间的数值，其他信息略去
-                retime = reline.split(' ')[-2]
-                towrite = currentimestr[-8:] + ' ' + retime[used_piece:]
+                retime = reline.split(' ')[-2][used_strt:used_end]
+                retimenum = float(retime)
+                if retimenum >= 0:
+                    if 0 < retimenum <= 1:
+                        counter_0_1 += 1
+                    elif 1 < retimenum <= 5:
+                        counter_1_5 += 1
+                    elif 5 < retimenum <= 10:
+                        counter_5_10 += 1
+                    elif 10 < retimenum <= 50:
+                        counter_10_50 += 1
+                    else:
+                        counter_50_huge += 1
+                    towrite = None
+                    counters = [counter_0_1, counter_1_5, counter_5_10, counter_10_50, counter_50_huge]
+                    if sum(counters) % record_oncee == 0:
+                        towrite = currentimestr[-8:] + ' ' + str(counters)
+
                 # linux 平台下处理方式，见下方注释
                 # retime = reline.split(' ')[-2]
                 # towrite = currentimestr[-8:] + ' ' + retime[5:]
-            elif reline.find(u'无法访问' or u'UNREACHABLE') >= 0:
+            elif reline.find(u'无法访问' or u'请求超时' or u'UNREACHABLE') >= 0:
                 towrite = currentimestr + ' no response'
             else:
                 pass
-            logfile.write(towrite+'\n')
-            i += 1
+            if towrite:
+                logfile.write(towrite+'\n')
         else:
             continue
 
@@ -143,12 +169,14 @@ time(ms) would be record only
     print (currentimestr + ' thread exited')
 
 
-def main(ippre='192.168.22', ipstrt='1', ipend='255', saveinterval=60*10, duringtime=60*60*24):
+def main(ippre='192.168.22', ipstrt='1', ipend='255', recordonce=60*1, saveinterval=60*10, duringtime=60*60*24):
     """
     运行多个网络地址ping监控
     :return: no return
     """
     print 'ping {} from {} to {}\n'.format(ippre, ipstrt, ipend), '---- start searching ----'
+
+    ipend = str(int(ipend)+1)
     find_ips(ippre, ipstrt, ipend)
     # 获取符合条件的所有ip地址
     time.sleep(10)
@@ -159,23 +187,29 @@ def main(ippre='192.168.22', ipstrt='1', ipend='255', saveinterval=60*10, during
 
     threads = []
     addrs = IP_ADDRESSES
-    for addr in addrs:
-        threads.append(threading.Thread(target=monitor, args=(addr, saveinterval, duringtime)))
-    starttime = datetime.datetime.now()
-    print '\nmulti_pings start at ', starttime.strftime('%Y-%m-%d %H:%M:%S')
-    for t in threads:
-        t.setDaemon(True)
-        t.start()
-    for t in threads:
-        t.join()
+    if addrs is not None:
+        for addr in addrs:
+            threads.append(threading.Thread(target=monitor, args=(addr, recordonce, saveinterval, duringtime)))
+        starttime = datetime.datetime.now()
+        print '\nmulti_pings start at ', starttime.strftime('%Y-%m-%d %H:%M:%S')
+        for t in threads:
+            t.setDaemon(True)
+            t.start()
+            time.sleep(2)
+        for t in threads:
+            t.join()
     endtime = datetime.datetime.now()
     print 'multi_pings end at ', endtime.strftime('%Y-%m-%d %H:%M:%S')
 
 if __name__ == "__main__":
 
-    ip_pre, ip_start, ip_endd = '192.168.0', '100', '255'
-    save_interval = 5
+    ip_pre, ip_start, ip_endd = '192.168.22', '1', '35'
+    # record_once = 60 * 1
+    # save_interval = 60 * 2
+    # monitor_during_time = 60 * 10
+    record_once = 5
+    save_interval = 10
     monitor_during_time = 20
 
-    main(ip_pre, ip_start, ip_endd, save_interval, monitor_during_time)
+    main(ip_pre, ip_start, ip_endd, record_once, save_interval, monitor_during_time)
 
