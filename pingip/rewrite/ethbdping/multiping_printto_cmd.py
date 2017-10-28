@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # _*_ coding:utf-8 _*_
 # -----------------------------------------------------------
-# File Name：     ethbdping_subporcess_single.py
+# File Name：     multiping_use_one_iothread.py
 # Description :
 #   Author:      fan
 #   date:        2017/10/11
@@ -11,13 +11,16 @@
 import subprocess
 import os, platform
 import time, datetime
+from threading import Thread, Lock
 import threading
 import thread
 import codecs
 
-global IP_ADDRESSES, QUIT_FLAG
+global IP_ADDRESSES, QUIT_FLAG, WRITE_BUFFER, TOTAL_RECORD, ISLOCKED
 IP_ADDRESSES = []
-QUIT_FLAG = False
+WRITE_BUFFER = []
+TOTAL_RECORD = 0
+ISLOCKED = False
 nowtime = datetime.datetime.now
 
 def get_os():
@@ -61,46 +64,36 @@ def find_ips(ip_prefix, ip_strt, ip_end):
         time.sleep(0.1)
 
 
-def monitor(ipstr, record_oncee, save_intervall, thread_during):
+def writedata(filename, data):
+    with codecs.open(filename, 'a+', 'utf-8') as f:
+        f.write(data)
+
+
+def monitor(ipstr, record_oncee, quit_set):
     """
     在线程中向每个地址发送ping命令，根据回显信息监控其状态，保存信息到指定文件中
     :param ipstr: 单个ip地址
-    :param save_intervall: 记录文件的保存间隔，默认30分钟
-    :param thread_during: 线程运行多久后退出，默认24小时
+    :param save_set: 记录文件的保存间隔，默认30分钟
+    :param quit_set: 线程运行多久后退出，默认24小时
     :return:
     """
-    global QUIT_FLAG
-
     used_strt, used_end = get_os()[4:6]
     # 回显信息中响应时间参数的位置单位秒（字符串split方法生成列表）
 
-    filename = ipstr+'.txt'
-    logfile = codecs.open(filename, 'a+', 'utf-8')
-    time.sleep(0.1)
-    logfile.write('\n'+"""\
-------------------------------------------------
-start ping {0} at {1}
-if one address were reachable, the times of
-right response with be record with time couple:
-[t<=1, 1<t<=5, 5<t<=10, 10<t<=50, 50<t ]
-------------------------------------------------\n""".format(
-        ipstr, nowtime().strftime('%Y-%m-%d %H:%M:%S')))
     time.sleep(0.1)
     if platform.system() == 'Windows':
         cmd = ['ping', '-l', '1400', '-t', ipstr]
     else:
         cmd = ['ping', '-s', '1400', ipstr]
-
     popen = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-    currentimestr = ''
-    thread_start_time = nowtime()
+
     counter_0_1 = 0
     counter_1_5 = 0
     counter_5_10 = 0
     counter_10_50 = 0
     counter_50_huge = 0
 
-    while not QUIT_FLAG:
+    while True:
         currentime = nowtime()
         currentimestr = currentime.strftime('%Y-%m-%d %H:%M:%S')
         line = popen.stdout.readline()
@@ -108,7 +101,7 @@ right response with be record with time couple:
             reline = line[:-1].decode(get_os()[3]).upper()
             towrite = ''
             if reline.upper().find('PING') >= 0:
-                towrite = currentimestr + ' ' + reline[:-1]
+                towrite = ' '.join([currentimestr, ipstr, reline[:-1]])
             elif reline.upper().find('TTL') >= 0:
                 # 获取回显信息，只取响应时间的数值，其他信息略去
                 retime = reline.split(' ')[-2][used_strt:used_end]
@@ -124,56 +117,47 @@ right response with be record with time couple:
                         counter_10_50 += 1
                     else:
                         counter_50_huge += 1
-                    towrite = None
                     counters = [counter_0_1, counter_1_5, counter_5_10, counter_10_50, counter_50_huge]
                     if sum(counters) % record_oncee == 0:
-                        towrite = currentimestr[-8:] + ' ' + str(counters)
+                        towrite = ' '.join([currentimestr[-8:],  ipstr, str(counters)])
 
-                # linux 平台下处理方式，见下方注释
-                # retime = reline.split(' ')[-2]
-                # towrite = currentimestr[-8:] + ' ' + retime[5:]
             elif reline.find(u'无法访问' or u'请求超时' or u'UNREACHABLE') >= 0:
-                towrite = currentimestr + ' no response'
+                towrite = ' '.join([currentimestr, ipstr,  'no response'])
             else:
                 pass
-            if towrite:
-                logfile.write(towrite+'\n')
         else:
             continue
 
-        delta = int((currentime - thread_start_time).total_seconds())
-        # 线程运行的时间，单位s，seconds取整数
-
-        if delta % save_intervall != 0:
-            # 判断是否进行保存
-            # 根据最后
-            continue
-        else:
-            if delta >= thread_during:
-                # 判断是否退出回显监控循环
-                logfile.write(currentime.strftime('%Y-%m-%d %H:%M:%S ') + 'monitor quited')
-                logfile.close()
-                time.sleep(1)
-                QUIT_FLAG = True
-            else:
-                # 执行保存，即执行一次close操作并重新打开
-                logfile.write(currentime.strftime('%Y-%m-%d %H:%M:%S ') + 'data saved\n')
-                logfile.close()
-                time.sleep(1)
-                logfile = codecs.open(filename, 'a', 'utf-8')
-
-    time.sleep(.1)
-
-    popen.kill()
-    # 将当前线程杀死
-    print (currentimestr + ' thread exited')
+        for i in xrange(60):
+            try:
+                if ISLOCKED is False:
+                    WRITE_BUFFER.append(towrite)
+                    TOTAL_RECORD += 1
+                    if TOTAL_RECORD < quit_set:
+                        pass
+                    else:
+                        WRITE_BUFFER.append([nowtime().strftime('%Y-%m-%d %H:%M:%S '), ipstr, 'monitor quited'])
+                        # 准备执行退出
+                        time.sleep(1)
+                        popen.kill()
+                        # 将当前线程杀死
+                        print (nowtime().strftime('%Y-%m-%d %H:%M:%S '), ipstr, ' thread exited')
+                    break
+                else:
+                    time.sleep(1)
+                    continue
+            except Exception:
+                pass
 
 
-def main(ippre='192.168.22', ipstrt='1', ipend='255', recordonce=60*1, saveinterval=60*10, duringtime=60*60*24):
+def main(ippre='192.168.22', ipstrt='1', ipend='255', recordonce=60*1, saveset=500, quiteset=2000):
     """
     运行多个网络地址ping监控
     :return: no return
     """
+    WRITE_BUFFER = []
+    TOTAL_RECORD = 0
+    ISLOCKED = False
     print 'ping {} from {} to {}\n'.format(ippre, ipstrt, ipend), '---- start searching ----'
 
     ipend = str(int(ipend)+1)
@@ -181,25 +165,50 @@ def main(ippre='192.168.22', ipstrt='1', ipend='255', recordonce=60*1, saveinter
     # 获取符合条件的所有ip地址
     time.sleep(10)
     print '---- end searching ----', '\n\nfind all ip addresses here:'
-
     for ip in IP_ADDRESSES:
         print ip
 
+    data = '\n' + """\
+    ------------------------------------------------
+    start ping at {0}:
+    {1}
+    if one address were reachable, the times of
+    right response with be record with time couple:
+    [t<=1, 1<t<=5, 5<t<=10, 10<t<=50, 50<t ]
+    ------------------------------------------------\n""".format(nowtime().strftime('%Y-%m-%d %H:%M:%S'),
+                                                                 *IP_ADDRESSES)
+    writedata('log.txt', data)
+    time.sleep(2)
     threads = []
     addrs = IP_ADDRESSES
     if addrs is not None:
         for addr in addrs:
-            threads.append(threading.Thread(target=monitor, args=(addr, recordonce, saveinterval, duringtime)))
+            threads.append(threading.Thread(target=monitor, args=(addr, recordonce, quiteset)))
         starttime = datetime.datetime.now()
         print '\nmulti_pings start at ', starttime.strftime('%Y-%m-%d %H:%M:%S')
         for t in threads:
             t.setDaemon(True)
             t.start()
             time.sleep(2)
-        for t in threads:
-            t.join()
-    endtime = datetime.datetime.now()
-    print 'multi_pings end at ', endtime.strftime('%Y-%m-%d %H:%M:%S')
+        # for t in threads:
+        #     t.join()
+    while True:
+        time.sleep(1)
+        if len(WRITE_BUFFER) < saveset:
+            # 判断是否进行保存
+            continue
+        else:
+            # 判断是否退出程序
+            ISLOCKED = True
+            if ISLOCKED:
+                writedata('log.txt', WRITE_BUFFER)
+                time.sleep(2)
+                print 'saved'
+                WRITE_BUFFER = []
+                ISLOCKED = False
+            if TOTAL_RECORD >= quiteset and not ISLOCKED:
+                print 'multi_pings end at ', nowtime().strftime('%Y-%m-%d %H:%M:%S')
+
 
 if __name__ == "__main__":
 
@@ -208,8 +217,8 @@ if __name__ == "__main__":
     # save_interval = 60 * 2
     # monitor_during_time = 60 * 10
     record_once = 5
-    save_interval = 10
-    monitor_during_time = 20
+    save_set = 2
+    quite_set = 5
 
-    main(ip_pre, ip_start, ip_endd, record_once, save_interval, monitor_during_time)
+    main(ip_pre, ip_start, ip_endd, record_once, save_set, quite_set)
 
