@@ -65,6 +65,7 @@ def monitor(ipstr, record_oncee, save_intervall, thread_during):
     """
     在线程中向每个地址发送ping命令，根据回显信息监控其状态，保存信息到指定文件中
     :param ipstr: 单个ip地址
+    :paramrecord_oncee: 记录间隔
     :param save_intervall: 记录文件的保存间隔，默认30分钟
     :param thread_during: 线程运行多久后退出，默认24小时
     :return:
@@ -127,6 +128,7 @@ right response with be record with time couple:
                     towrite = None
                     counters = [counter_0_1, counter_1_5, counter_5_10, counter_10_50, counter_50_huge]
                     if sum(counters) % record_oncee == 0:
+                        # 判断是否进行记录
                         towrite = currentimestr[-8:] + ' ' + str(counters)
 
                 # linux 平台下处理方式，见下方注释
@@ -203,7 +205,7 @@ def main(ippre='192.168.22', ipstrt='1', ipend='255', recordonce=60*1, saveinter
 
 if __name__ == "__main__":
 
-    ip_pre, ip_start, ip_endd = '192.168.22', '200', '201'
+    ip_pre, ip_start, ip_endd = '192.168.39', '0', '255'
     # record_once = 60 * 1
     # save_interval = 60 * 2
     # monitor_during_time = 60 * 10

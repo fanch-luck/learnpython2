@@ -42,8 +42,8 @@ def monitor(ipstr):
     file.write("""\
     ------------------------------------------------
     start ping {0} at {1}
-	(if one adress is reachable, 
-	a response time(ms) would be recorld)
+    (if one adress is reachable,
+    a response time(ms) would be recorld)
     ------------------------------------------------
     """.format(ipstr, nowtime().strftime('%Y-%m-%d %H:%M:%S')))
     time.sleep(0.1)
