@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="gb2312"?>
+<project filever="1.0">
+<AddrInfo ScrnNo="0" HasNoPlcAddr="0">
+
+<PLCAddr>
+<WordAddr>
+<Add Addr="SD_W_008013" Len="1" Fast="0" AddrPartNum="1"/></WordAddr></PLCAddr></AddrInfo></project>
