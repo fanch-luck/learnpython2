@@ -41,11 +41,157 @@
     4，按下q返回到主菜单
 5，退出：结束程序
 """
+import json
+
+
+def create():
+    print '【1.新建】' \
+          '输入和职位(空格隔开)按下回车即输入1条记录，可以连续输入多条，输入完成后按下F3:'
+    data = {}
+    i = 1
+    while True:
+        s = raw_input()
+        if s == '':
+            break
+        else:
+            ss =s.split(' ')
+            print ss
+            data[i] = ss
+            i += 1
+
+    with open('data.txt', 'w') as f:
+        f.write(json.dumps(data))
+    print '新建完成！\n'
+
+
+def inquire():
+    with open('data.txt', 'r') as f:
+        lines = json.loads(f.read())
+    names = []
+    for key, value in lines.items():
+        names.append(value[0])
+    while True:
+        s = raw_input("""\
+        【2.查询】
+        1. 查询所有
+        2. 查询个人
+        3. 返回
+        请输入查询序号，按Enter确认:""")
+        if s == '':
+            continue
+        elif s == '1':
+            for key, value in lines.items():
+                print key, value[0], value[1]
+
+        elif s == '2':
+            ss = raw_input('请输入名字：')
+            if ss in names:
+                for key, value in lines.items():
+                    if ss == value[0]:
+                        print key, value[0], value[1]
+            elif ss == 'back':
+                print '正在返回...\n'
+                continue
+            else:
+                print '输入有误，请重新输入。\n'
+                continue
+        elif s == '3':
+            break
+        print '查询完成！'
+
+def modify():
+    with open('data.txt', 'r') as f:
+        lines = json.loads(f.read())
+    s = raw_input('【3.修改】'
+                  '输入要修改的序号，后面跟着新的名称和职位（分别以空格相隔），按下Enter确认。\n')
+    ss = s.split(' ')
+    if len(ss) == 3:
+        if ss[0] in lines.keys():
+            lines[ss[0]] = ss[1:]
+            with open('data.txt', 'w') as ff:
+                ff.write(json.dumps(lines))
+        else:
+            print '要修改的条目不存在。\n'
+    elif ss[0] == 'back':
+        print '正在返回...\n'
+    else:
+        print '无法识别的命令。\n'
+
+
+def count():
+    with open('data.txt', 'r') as f:
+        lines = json.loads(f.read())
+    names = {}
+    posts = {}
+    for key, [name, post] in lines.items():
+        if name not in names.keys():
+            names[name] = [{key: [name, post]}]
+        else:
+            names[name].append({key: [name, post]})
+        if post not in posts.keys():
+            posts[post] = 1
+        else:
+            posts[post] += 1
+    s = raw_input("""\
+    【4.统计】
+    1. 统计总人数
+    2. 统计各岗位人数
+    3. 统计重名情况\n
+    """)
+    if s == '1':
+        print '在数据表中，总人数：', len(lines)
+    elif s == '2':
+        print '岗位人数统计：\n',
+        for post, num in posts.items():
+            print post, num, '人'
+    elif s == '3':
+        print '重名情况统计：\n'
+        ss = 0
+        for key, value in names.items():
+            if len(value) >= 2:
+                ss += 1
+                print key, '重名{}次\n'.format(len(value))
+                for v in value:
+                    print v
+        if ss == 0:
+            print '重名0次\n'
+    elif s == 'back':
+        print '正在返回...\n'
+    else:
+        print '无法识别的命令。'
+
+
+
+def quit_out():
+    print '正在退出...'
+    quit()
 
 
 def func():
-    pass
+    while True:
+        type_in = raw_input("""\
+    \n主功能菜单
+    1. 新建
+    2. 查询
+    3. 修改
+    4. 统计
+    5. 退出
+    请输入功能序号，按Enter选择：\n
+        """)
+        if type_in == '1':
+            create()
+        elif type_in == '2':
+            inquire()
+        elif type_in == '3':
+            modify()
+        elif type_in == '4':
+            count()
+        elif type_in == '5':
+            quit_out()
+        else:
+            print "输入有误，请重新输入：\n"
+            continue
 
 
 if __name__ == "__main__":
-    pass
+    func()
