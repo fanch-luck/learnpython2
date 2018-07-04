@@ -124,11 +124,11 @@ def count():
     names = {}
     posts = {}
     for key, [name, post] in lines.items():
-        if name not in names.keys():
-            names[name] = [{key: [name, post]}]
-        else:
-            names[name].append({key: [name, post]})
-        if post not in posts.keys():
+        if name not in names.keys():    # 如果名字字典中不包含当前名字
+            names[name] = [{key: [name, post]}]    # 创建一条以当前名字为键的记录，值是包含此名字的记录列表
+        else:    # 如果名字字典中已包含当前名字（不是第一次出现）
+            names[name].append({key: [name, post]})    # 把当前名字记录添加到名字对应的值（记录列表）中
+        if post not in posts.keys():    # 实现对职位的统计，第一次出现：建立键值，之后出现：值加1
             posts[post] = 1
         else:
             posts[post] += 1
